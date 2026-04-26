@@ -1,3 +1,7 @@
+-- =========================
+-- FACT ORDERS
+-- =========================
+
 DROP TABLE IF EXISTS analytics.fact_orders;
 
 CREATE TABLE analytics.fact_orders AS
@@ -10,7 +14,6 @@ WITH items AS (
     FROM clean.order_items
     GROUP BY order_id
 ),
-
 payments AS (
     SELECT
         order_id,
@@ -18,7 +21,6 @@ payments AS (
     FROM clean.payments
     GROUP BY order_id
 ),
-
 reviews AS (
     SELECT
         order_id,
@@ -26,32 +28,28 @@ reviews AS (
     FROM clean.reviews
     GROUP BY order_id
 )
-
 SELECT
     o.order_id,
     o.customer_id,
     o.order_purchase_timestamp,
     o.order_purchase_timestamp::date AS order_date,
     o.delivery_delay,
-
     i.total_items_price,
     i.total_freight,
     i.total_order_items_value,
-
     p.total_payment_value,
     r.avg_review_score
-
 FROM clean.orders o
 LEFT JOIN items i ON o.order_id = i.order_id
 LEFT JOIN payments p ON o.order_id = p.order_id
 LEFT JOIN reviews r ON o.order_id = r.order_id
-
 WHERE o.order_purchase_timestamp >= '2017-01-01'
 AND o.order_purchase_timestamp < '2018-09-01';
 
 
+
 -- =========================
--- KPI GLOBAL
+-- KPIS GLOBAL
 -- =========================
 
 DROP TABLE IF EXISTS analytics.kpis;
@@ -64,6 +62,10 @@ SELECT
 FROM analytics.fact_orders;
 
 
+
+-- =========================
+-- KPIS MONTHLY
+-- =========================
 
 DROP TABLE IF EXISTS analytics.kpis_monthly;
 
@@ -78,6 +80,11 @@ GROUP BY 1
 ORDER BY 1;
 
 
+
+-- =========================
+-- RFM BASE
+-- =========================
+
 DROP TABLE IF EXISTS analytics.rfm_base;
 
 CREATE TABLE analytics.rfm_base AS
@@ -91,41 +98,37 @@ FROM analytics.fact_orders;
 
 
 -- =========================
--- RFM SCORES
+-- RFM SCORES (FIX ICI)
 -- =========================
 
 DROP TABLE IF EXISTS analytics.rfm_scores;
 
 CREATE TABLE analytics.rfm_scores AS
-WITH rfm AS (
+WITH max_date AS (
+    SELECT MAX(order_purchase_timestamp) AS max_date
+    FROM analytics.fact_orders
+),
+rfm AS (
     SELECT
-        customer_id,
-
-        -- Recency : jours depuis dernier achat
-        EXTRACT(DAY FROM (NOW() - MAX(order_purchase_timestamp))) AS recency,
-
-        -- Frequency : nombre de commandes
-        COUNT(DISTINCT order_id) AS frequency,
-
-        -- Monetary : total dépensé
-        SUM(total_payment_value) AS monetary
-
-    FROM analytics.rfm_base
-    GROUP BY customer_id
+        b.customer_id,
+        EXTRACT(DAY FROM (m.max_date - MAX(b.order_purchase_timestamp))) AS recency,
+        COUNT(DISTINCT b.order_id) AS frequency,
+        SUM(b.total_payment_value) AS monetary
+    FROM analytics.rfm_base b
+    CROSS JOIN max_date m
+    GROUP BY b.customer_id, m.max_date
+    HAVING SUM(b.total_payment_value) > 0   
 )
-
 SELECT
     customer_id,
     recency,
     frequency,
     monetary,
-
-    -- scoring (1 à 5)
-   NTILE(5) OVER (ORDER BY recency ASC) AS r_score,
-   NTILE(5) OVER (ORDER BY frequency DESC) AS f_score,
-   NTILE(5) OVER (ORDER BY monetary DESC) AS m_score
-
+    NTILE(5) OVER (ORDER BY recency ASC) AS r_score,
+    NTILE(5) OVER (ORDER BY frequency DESC) AS f_score,
+    NTILE(5) OVER (ORDER BY monetary DESC) AS m_score
 FROM rfm;
+
 
 
 -- =========================
@@ -143,10 +146,7 @@ SELECT
     r_score,
     f_score,
     m_score,
-
-    -- FIX IMPORTANT : concat en texte lisible
     CONCAT(r_score, '-', f_score, '-', m_score) AS rfm_score,
-
     CASE
         WHEN r_score >= 4 AND f_score >= 4 THEN 'Champions'
         WHEN r_score >= 3 AND f_score >= 3 THEN 'Loyal Customers'
@@ -154,9 +154,22 @@ SELECT
         WHEN r_score <= 2 AND f_score >= 4 THEN 'At Risk'
         WHEN r_score <= 2 AND f_score <= 2 THEN 'Lost'
         ELSE 'Potential'
-    END AS segment
-
+    END AS segment,
+    CASE
+        WHEN r_score >= 4 AND f_score >= 4 THEN 1
+        WHEN r_score >= 3 AND f_score >= 3 THEN 2
+        WHEN r_score >= 4 AND f_score <= 2 THEN 3
+        WHEN r_score <= 2 AND f_score >= 4 THEN 4
+        WHEN r_score <= 2 AND f_score <= 2 THEN 5
+        ELSE 6
+    END AS segment_order
 FROM analytics.rfm_scores;
+
+
+
+-- =========================
+-- CHURN
+-- =========================
 
 DROP TABLE IF EXISTS analytics.churn;
 
@@ -172,19 +185,22 @@ last_order AS (
     FROM analytics.fact_orders
     GROUP BY customer_id
 )
-
 SELECT
     l.customer_id,
     l.last_order_date,
     EXTRACT(DAY FROM (m.max_date - l.last_order_date)) AS days_since_last_order,
-
     CASE
         WHEN EXTRACT(DAY FROM (m.max_date - l.last_order_date)) > 180 THEN 1
         ELSE 0
     END AS is_churned
-
 FROM last_order l
 CROSS JOIN max_date m;
+
+
+
+-- =========================
+-- CUSTOMER SUMMARY
+-- =========================
 
 DROP TABLE IF EXISTS analytics.customer_summary;
 
@@ -192,6 +208,7 @@ CREATE TABLE analytics.customer_summary AS
 SELECT
     r.customer_id,
     r.segment,
+    r.segment_order,
     r.recency,
     r.frequency,
     r.monetary,
@@ -199,6 +216,12 @@ SELECT
 FROM analytics.rfm_segments r
 LEFT JOIN analytics.churn c
 ON r.customer_id = c.customer_id;
+
+
+
+-- =========================
+-- PRODUCT PERFORMANCE
+-- =========================
 
 DROP TABLE IF EXISTS analytics.product_performance;
 
@@ -214,8 +237,13 @@ ON oi.product_id = p.product_id
 GROUP BY 1
 ORDER BY revenue DESC;
 
-DROP TABLE IF EXISTS analytics.dim_date;
 
+
+-- =========================
+-- DIM DATE
+-- =========================
+
+DROP TABLE IF EXISTS analytics.dim_date;
 
 CREATE TABLE analytics.dim_date AS
 SELECT
