@@ -44,8 +44,7 @@ LEFT JOIN items i ON o.order_id = i.order_id
 LEFT JOIN payments p ON o.order_id = p.order_id
 LEFT JOIN reviews r ON o.order_id = r.order_id
 WHERE o.order_purchase_timestamp >= '2017-01-01'
-AND o.order_purchase_timestamp < '2018-09-01';
-
+  AND o.order_purchase_timestamp < '2018-09-01';
 
 
 -- =========================
@@ -60,7 +59,6 @@ SELECT
     SUM(total_payment_value) AS total_revenue,
     AVG(total_payment_value) AS avg_order_value
 FROM analytics.fact_orders;
-
 
 
 -- =========================
@@ -80,7 +78,6 @@ GROUP BY 1
 ORDER BY 1;
 
 
-
 -- =========================
 -- RFM BASE
 -- =========================
@@ -96,9 +93,8 @@ SELECT
 FROM analytics.fact_orders;
 
 
-
 -- =========================
--- RFM SCORES (FIX ICI)
+-- RFM SCORES (SCORING PUR)
 -- =========================
 
 DROP TABLE IF EXISTS analytics.rfm_scores;
@@ -117,7 +113,7 @@ rfm AS (
     FROM analytics.rfm_base b
     CROSS JOIN max_date m
     GROUP BY b.customer_id, m.max_date
-    HAVING SUM(b.total_payment_value) > 0   
+    HAVING SUM(b.total_payment_value) > 0
 )
 SELECT
     customer_id,
@@ -130,9 +126,8 @@ SELECT
 FROM rfm;
 
 
-
 -- =========================
--- RFM SEGMENTS
+-- RFM SEGMENTS (VERSION PRO CLEAN)
 -- =========================
 
 DROP TABLE IF EXISTS analytics.rfm_segments;
@@ -147,24 +142,41 @@ SELECT
     f_score,
     m_score,
     CONCAT(r_score, '-', f_score, '-', m_score) AS rfm_score,
+
     CASE
-        WHEN r_score >= 4 AND f_score >= 4 THEN 'Champions'
-        WHEN r_score >= 3 AND f_score >= 3 THEN 'Loyal Customers'
-        WHEN r_score >= 4 AND f_score <= 2 THEN 'New Customers'
-        WHEN r_score <= 2 AND f_score >= 4 THEN 'At Risk'
-        WHEN r_score <= 2 AND f_score <= 2 THEN 'Lost'
+        -- 1. Clients réellement perdus (très longue inactivité)
+        WHEN recency > 365 THEN 'Lost'
+
+        -- 2. Clients churn (aligné avec ton modèle)
+        WHEN recency > 180 THEN 'At Risk'
+
+        -- 3. Clients en dégradation
+        WHEN recency BETWEEN 90 AND 180 THEN 'At Risk'
+
+        -- 4. Top clients
+        WHEN r_score >= 4 AND f_score >= 4 AND m_score >= 4 THEN 'Champions'
+
+        -- 5. Clients fidèles
+        WHEN f_score >= 4 AND m_score >= 4 THEN 'Loyal Customers'
+
+        -- 6. Nouveaux clients
+        WHEN recency <= 30 THEN 'New Customers'
+
+        -- 7. Autres
         ELSE 'Potential'
     END AS segment,
+
     CASE
-        WHEN r_score >= 4 AND f_score >= 4 THEN 1
-        WHEN r_score >= 3 AND f_score >= 3 THEN 2
-        WHEN r_score >= 4 AND f_score <= 2 THEN 3
-        WHEN r_score <= 2 AND f_score >= 4 THEN 4
-        WHEN r_score <= 2 AND f_score <= 2 THEN 5
+        WHEN recency > 365 THEN 5
+        WHEN recency > 180 THEN 4
+        WHEN recency BETWEEN 90 AND 180 THEN 4
+        WHEN r_score >= 4 AND f_score >= 4 AND m_score >= 4 THEN 1
+        WHEN f_score >= 4 AND m_score >= 4 THEN 2
+        WHEN recency <= 30 THEN 3
         ELSE 6
     END AS segment_order
-FROM analytics.rfm_scores;
 
+FROM analytics.rfm_scores;
 
 
 -- =========================
@@ -197,7 +209,6 @@ FROM last_order l
 CROSS JOIN max_date m;
 
 
-
 -- =========================
 -- CUSTOMER SUMMARY
 -- =========================
@@ -215,8 +226,7 @@ SELECT
     c.is_churned
 FROM analytics.rfm_segments r
 LEFT JOIN analytics.churn c
-ON r.customer_id = c.customer_id;
-
+    ON r.customer_id = c.customer_id;
 
 
 -- =========================
@@ -233,10 +243,9 @@ SELECT
     AVG(oi.price) AS avg_price
 FROM clean.order_items oi
 JOIN clean.products p
-ON oi.product_id = p.product_id
+    ON oi.product_id = p.product_id
 GROUP BY 1
 ORDER BY revenue DESC;
-
 
 
 -- =========================
