@@ -55,10 +55,23 @@ Product Analytics:
 - Pareto distribution
 
 ## Power BI Dashboard
-Pages:
-- Overview (KPIs, revenue trend, top categories)
-- Customer Segmentation (RFM distribution, behavior analysis)
-- Product Analysis (scatter plot revenue vs price, performance ranking)
+
+The dashboard is organized into 3 main pages:
+
+### Overview
+KPIs, revenue trends, and top product categories.
+
+![Overview Dashboard](images/overview.png)
+
+### Customer Segmentation (RFM Analysis)
+Customer segmentation based on RFM model (Champions, Loyal, At Risk, Lost).
+
+![RFM Dashboard](images/Customer_Segmentation.png)
+
+### Customer Strategy Recommendations
+Revenue at-risk KPI, summary overview (pie chart), key insights, and actionable business recommendations.
+
+![Product Dashboard](images/Recommendations.png)
 
 ## Project Structure
 data-analyst-project/
@@ -96,4 +109,4 @@ Connect Power BI to PostgreSQL
 - Real-time data ingestion pipeline
 
 ## Author
-Data Analyst Portfolio Project
+Julien Auclair - Data Analyst 
