@@ -56,7 +56,7 @@ Product Analytics:
 
 ## Power BI Dashboard
 
-The dashboard is organized into 3 main pages:
+The dashboard is organized into 5 main pages. The following 3 pages are highlighted:
 
 ### Overview
 KPIs, revenue trends, and top product categories.
@@ -71,7 +71,7 @@ Customer segmentation based on RFM model (Champions, Loyal, At Risk, Lost).
 ### Customer Strategy Recommendations
 Revenue at-risk KPI, summary overview (pie chart), key insights, and actionable business recommendations.
 
-![Product Dashboard](images/Recommendations.png)
+![Recommendations Dashboard](images/Recommendations.png)
 
 ## Project Structure
 data-analyst-project/
