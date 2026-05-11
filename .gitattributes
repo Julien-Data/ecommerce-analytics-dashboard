@@ -1,0 +1,7 @@
+# --- Fix GitHub language detection ---
+
+# Force la détection correcte du SQL
+*.sql linguist-detectable=true
+
+# S'assure que les notebooks restent comptés comme Python (pas ignorés)
+*.ipynb linguist-language=Python
